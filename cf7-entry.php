@@ -1,4 +1,3 @@
-
 <?php
 
 /**
@@ -6,14 +5,14 @@
  * Plugin Name:       Abdullah Naseem Submission Manager for Contact Form 7
  * Plugin URI:        https://github.com/abdullahnart/an-submission-entries
  * Description:       Store and manage Contact Form 7 submissions from your WordPress dashboard.
- * Version:           1.1.0
+ * Version:           1.1.2
  * Author:            Abdullah Naseem
  * Author URI:        https://github.com/abdullahnart/
  * License:           GPL-2.0-or-later
  * License URI:       https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain:       an-submission-entries
  * Requires Plugins: contact-form-7
- * Requires at least: 5.0
+ * Requires at least: 5.7
  * Requires PHP:      7.4
  */
 
@@ -200,7 +199,8 @@ add_action(
  */
 function an_submission_entries_admin_styles( $hook ) {
 
-    if ( 'toplevel_page_an-submission-entries' !== $hook ) {
+    // Load styles only on the Submission Entries submenu.
+    if ( false === strpos( $hook, 'an-submission-entries' ) ) {
         return;
     }
 
@@ -448,6 +448,16 @@ function an_render_forms_page() {
     /*
      * If a form was selected, show entries.
      */
+    if ( isset( $_GET['entry_id'] ) && isset( $_GET['form_id'] ) ) {
+
+        an_render_submission_entry(
+            absint( $_GET['form_id'] ),
+            absint( $_GET['entry_id'] )
+        );
+
+        return;
+    }
+
     if ( isset( $_GET['form_id'] ) ) {
 
         $form_id = absint(
@@ -630,7 +640,7 @@ function an_render_forms_page() {
  */
 
 /**
- * Display entries for selected form.
+ * Display a list of submissions for the selected form.
  */
 function an_render_form_entries( $form_id ) {
 
@@ -661,7 +671,7 @@ function an_render_form_entries( $form_id ) {
 
     $entries = $wpdb->get_results(
         $wpdb->prepare(
-            "SELECT * FROM $table_name
+            "SELECT id, form_id, submitted_data, submit_time FROM $table_name
              WHERE form_id = %d
              ORDER BY submit_time DESC",
             $form_id
@@ -704,7 +714,7 @@ function an_render_form_entries( $form_id ) {
 
                 <h2>
                     <?php echo esc_html( count( $entries ) ); ?>
-                    Submission(s)
+                    Entries
                 </h2>
 
             </div>
@@ -727,94 +737,46 @@ function an_render_form_entries( $form_id ) {
             <?php else : ?>
 
 
-                <?php foreach ( $entries as $entry ) : ?>
-
-                    <?php
-
-                    $data = maybe_unserialize(
-                        $entry->submitted_data
-                    );
-
-                    ?>
-
-                    <div class="an-se-entry">
-
-                        <div class="an-se-entry-meta">
-
-                            Submitted:
-                            <strong>
-                                <?php
-                                echo esc_html(
-                                    $entry->submit_time
-                                );
-                                ?>
-                            </strong>
-
-                            &nbsp; | &nbsp;
-
-                            Entry #<?php echo esc_html( $entry->id ); ?>
-
-                        </div>
-
-
-                        <?php if ( is_array( $data ) && ! empty( $data ) ) : ?>
-
-                            <table class="an-se-data">
-
-                                <tbody>
-
-                                    <?php foreach ( $data as $key => $value ) : ?>
-
-                                        <?php
-
-                                        if ( is_array( $value ) ) {
-                                            $value = implode(
-                                                ', ',
-                                                $value
-                                            );
-                                        }
-
-                                        ?>
-
-                                        <tr>
-
-                                            <td>
-                                                <?php
-                                                echo esc_html(
-                                                    $key
-                                                );
-                                                ?>
-                                            </td>
-
-                                            <td>
-                                                <?php
-                                                echo nl2br(
-                                                    esc_html(
-                                                        $value
-                                                    )
-                                                );
-                                                ?>
-                                            </td>
-
-                                        </tr>
-
-                                    <?php endforeach; ?>
-
-                                </tbody>
-
-                            </table>
-
-                        <?php else : ?>
-
-                            <p>
-                                No submission data available.
-                            </p>
-
-                        <?php endif; ?>
-
-                    </div>
-
-                <?php endforeach; ?>
+                <table class="an-se-table">
+                    <thead>
+                        <tr>
+                            <th>Entry</th>
+                            <th>Date submitted</th>
+                            <th>Preview</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ( $entries as $entry ) : ?>
+                            <?php
+                            $entry_data = maybe_unserialize( $entry->submitted_data );
+                            $preview    = '';
+                            if ( is_array( $entry_data ) && ! empty( $entry_data ) ) {
+                                $preview_value = reset( $entry_data );
+                                $preview       = is_array( $preview_value ) ? implode( ', ', $preview_value ) : (string) $preview_value;
+                            }
+                            $entry_url = add_query_arg(
+                                array(
+                                    'page'     => 'an-submission-entries',
+                                    'form_id'  => $form_id,
+                                    'entry_id' => absint( $entry->id ),
+                                ),
+                                admin_url( 'admin.php' )
+                            );
+                            ?>
+                            <tr>
+                                <td>
+                                    <a class="an-se-form-name" href="<?php echo esc_url( $entry_url ); ?>">
+                                        Entry #<?php echo esc_html( $entry->id ); ?>
+                                    </a>
+                                </td>
+                                <td><?php echo esc_html( $entry->submit_time ); ?></td>
+                                <td><?php echo esc_html( wp_trim_words( $preview, 12 ) ); ?></td>
+                                <td><a class="an-se-button" href="<?php echo esc_url( $entry_url ); ?>">View Entry</a></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
 
 
             <?php endif; ?>
@@ -823,6 +785,61 @@ function an_render_form_entries( $form_id ) {
 
     </div>
 
+    <?php
+}
+
+
+/** Display one submission on its own page. */
+function an_render_submission_entry( $form_id, $entry_id ) {
+
+    if ( ! current_user_can( 'manage_options' ) ) {
+        return;
+    }
+
+    global $wpdb;
+    $table_name = $wpdb->prefix . 'cf7_submissions';
+    $entry      = $wpdb->get_row(
+        $wpdb->prepare(
+            "SELECT * FROM $table_name WHERE id = %d AND form_id = %d",
+            $entry_id,
+            $form_id
+        )
+    );
+
+    if ( ! $entry ) {
+        echo '<div class="wrap an-se-wrap"><div class="notice notice-error"><p>Entry not found.</p></div></div>';
+        return;
+    }
+
+    $form     = class_exists( 'WPCF7_ContactForm' ) ? WPCF7_ContactForm::get_instance( $form_id ) : false;
+    $back_url = add_query_arg(
+        array( 'page' => 'an-submission-entries', 'form_id' => $form_id ),
+        admin_url( 'admin.php' )
+    );
+    $data = maybe_unserialize( $entry->submitted_data );
+    ?>
+    <div class="wrap an-se-wrap">
+        <a class="an-se-back" href="<?php echo esc_url( $back_url ); ?>">← Back to Entries</a>
+        <div class="an-se-header">
+            <h1><span class="an-se-brand">AN</span>Entry #<?php echo esc_html( $entry->id ); ?></h1>
+            <p><?php echo esc_html( $form ? $form->title() : $entry->form_title ); ?> · Submitted <?php echo esc_html( $entry->submit_time ); ?></p>
+        </div>
+        <div class="an-se-card">
+            <div class="an-se-card-header"><h2>Submission Details</h2></div>
+            <div class="an-se-entry">
+                <?php if ( is_array( $data ) && ! empty( $data ) ) : ?>
+                    <table class="an-se-data"><tbody>
+                        <?php foreach ( $data as $key => $value ) : ?>
+                            <?php $value = is_array( $value ) ? implode( ', ', $value ) : (string) $value; ?>
+                            <tr><td><?php echo esc_html( $key ); ?></td><td><?php echo nl2br( esc_html( $value ) ); ?></td></tr>
+                        <?php endforeach; ?>
+                    </tbody></table>
+                <?php else : ?>
+                    <p>No submission data available.</p>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
     <?php
 }
 
@@ -945,3 +962,24 @@ function an_render_form_entries( $form_id ) {
 //     'an_cf7_submissions_shortcode'
 // );
 
+
+
+/**
+ * Initialize the plugin tracker
+ *
+ * @return void
+ */
+function appsero_init_tracker_abdullah_naseem_submission_manager_cf7() {
+
+    if ( ! class_exists( 'Appsero\Client' ) ) {
+      require_once __DIR__ . '/appsero/src/Client.php';
+    }
+
+    $client = new Appsero\Client( 'b4e8ed6e-bb08-4bcf-81ea-a173f64b9a15', 'Abdullah Naseem Submission Manager for Contact Form 7', __FILE__ );
+
+    // Active insights
+    $client->insights()->init();
+
+}
+
+appsero_init_tracker_abdullah_naseem_submission_manager_cf7();
