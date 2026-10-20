@@ -4,7 +4,7 @@ Tags: cf7 database, cf7, contact form 7 entries, contact form 7, submissions
 Requires at least: 6.5
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.1.7
+Stable tag: 1.1.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 Requires Plugins: contact-form-7
